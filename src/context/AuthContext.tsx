@@ -28,7 +28,7 @@ interface LoginPayload {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 const storageKey = 'skilllink-auth-user'
-const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD ?? 'admin123'
+const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD ?? 'skill-l!nk@2026'
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function AuthProvider({ children }: { children: ReactNode }) {
