@@ -55,7 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = window.localStorage.getItem(storageKey)
 
     if (saved) {
-      setUser(JSON.parse(saved) as AuthUser)
+      try {
+        setUser(JSON.parse(saved) as AuthUser)
+      } catch (error) {
+        console.error('Failed to parse saved auth user', error)
+        window.localStorage.removeItem(storageKey)
+      }
     }
   }, [])
 

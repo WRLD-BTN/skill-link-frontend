@@ -3,6 +3,11 @@ import type { JoinRequest, PlatformUser, UserRole } from '../types'
 
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
 
+// Validate environment at startup
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[SkillLink] VITE_API_URL not configured, using default http://localhost:4000')
+}
+
 async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${apiUrl}${path}`, {
     headers: {

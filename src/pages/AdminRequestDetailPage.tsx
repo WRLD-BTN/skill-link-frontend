@@ -17,14 +17,25 @@ export function AdminRequestDetailPage() {
       return
     }
 
+    const controller = new AbortController()
+    const signal = controller.signal
+
     fetchAdminRequest(requestId)
       .then((result) => {
-        setRequest(result.request)
-        setError('')
+        if (!signal.aborted) {
+          setRequest(result.request)
+          setError('')
+        }
       })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : 'Unable to load request.')
+        if (!signal.aborted) {
+          setError(requestError instanceof Error ? requestError.message : 'Unable to load request.')
+        }
       })
+
+    return () => {
+      controller.abort()
+    }
   }, [requestId])
 
   if (user?.role !== 'admin') {
