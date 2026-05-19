@@ -41,6 +41,10 @@ export function AdminDashboardPage() {
 
   const adminUser = user
 
+  const activeUsers = registeredUsers.filter((registeredUser) => registeredUser.status === 'Active').length
+  const activeClients = registeredUsers.filter(
+    (registeredUser) => registeredUser.role === 'client' && registeredUser.status === 'Active',
+  ).length
   const activeTradespeople = registeredUsers.filter(
     (registeredUser) => registeredUser.role === 'tradesperson' && registeredUser.status === 'Active',
   ).length
@@ -108,8 +112,12 @@ export function AdminDashboardPage() {
 
       <section className="stats-grid admin-stats">
         <article className="stat-card">
-          <strong>{registeredUsers.length}</strong>
-          <span>Total users</span>
+          <strong>{activeUsers}</strong>
+          <span>Active users</span>
+        </article>
+        <article className="stat-card">
+          <strong>{activeClients}</strong>
+          <span>Active clients</span>
         </article>
         <article className="stat-card">
           <strong>{activeTradespeople}</strong>

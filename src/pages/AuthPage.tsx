@@ -31,9 +31,17 @@ export function AuthPage() {
     }
   }, [navigate, user])
 
+  useEffect(() => {
+    if (role === 'admin') {
+      setAuthMode('signin')
+    }
+  }, [role])
+
   const from = (location.state as { from?: string } | null)?.from
   const buttonLabel =
-    authMode === 'create' && role === 'tradesperson'
+    role === 'admin'
+      ? 'Sign in'
+      : authMode === 'create' && role === 'tradesperson'
       ? 'Request admin approval'
       : authMode === 'create'
         ? 'Create account'
@@ -113,6 +121,7 @@ export function AuthPage() {
         <div className="auth-switch">
           <button
             className={authMode === 'create' ? 'primary-button' : 'ghost-button'}
+            disabled={role === 'admin'}
             onClick={() => setAuthMode('create')}
             type="button"
           >
@@ -128,30 +137,34 @@ export function AuthPage() {
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
-          {authMode === 'create' && (
+          {authMode === 'create' && role !== 'admin' && (
             <label>
               Full name
               <input
                 className="text-input"
                 onChange={(event) => setName(event.target.value)}
-                placeholder={role === 'admin' ? 'Admin name' : 'Your full name'}
+                placeholder="Your full name"
                 type="text"
                 value={name}
               />
             </label>
           )}
-          <label>
-            Email
-            <input
-              className="text-input"
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-              type="email"
-              value={email}
-            />
-          </label>
-          <p className="field-note">Email is used for sign in. Phone is captured for contact and approval records.</p>
+          {role !== 'admin' && (
+            <>
+              <label>
+                Email
+                <input
+                  className="text-input"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+              </label>
+              <p className="field-note">Email is used for sign in. Phone is captured for contact and approval records.</p>
+            </>
+          )}
           <label>
             Password
             <input
@@ -168,37 +181,41 @@ export function AuthPage() {
               value={password}
             />
           </label>
-          <label>
-            Phone
-            <input
-              className="text-input"
-              onChange={(event) => setPhone(event.target.value)}
-              placeholder="071 8321438"
-              required={role !== 'admin'}
-              type="tel"
-              value={phone}
-            />
-          </label>
-          <label>
-            Suburb
-            <input
-              className="text-input"
-              onChange={(event) => setSuburb(event.target.value)}
-              placeholder="Mbare, Borrowdale, CBD..."
-              type="text"
-              value={suburb}
-            />
-          </label>
-          <label>
-            City
-            <input
-              className="text-input"
-              onChange={(event) => setCity(event.target.value)}
-              placeholder="Harare or Bulawayo"
-              type="text"
-              value={city}
-            />
-          </label>
+          {role !== 'admin' && (
+            <>
+              <label>
+                Phone
+                <input
+                  className="text-input"
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="071 8321438"
+                  required
+                  type="tel"
+                  value={phone}
+                />
+              </label>
+              <label>
+                Suburb
+                <input
+                  className="text-input"
+                  onChange={(event) => setSuburb(event.target.value)}
+                  placeholder="Mbare, Borrowdale, CBD..."
+                  type="text"
+                  value={suburb}
+                />
+              </label>
+              <label>
+                City
+                <input
+                  className="text-input"
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder="Harare or Bulawayo"
+                  type="text"
+                  value={city}
+                />
+              </label>
+            </>
+          )}
           <label>
             Role
             <select className="text-input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
