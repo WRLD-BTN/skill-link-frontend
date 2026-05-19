@@ -39,6 +39,7 @@ textarea {
 
 .app-shell {
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .topbar {
@@ -480,6 +481,10 @@ h2 {
   align-items: end;
 }
 
+.inline-form {
+  align-items: start;
+}
+
 .feature-list {
   margin: 0;
   padding-left: 1.25rem;
@@ -548,6 +553,29 @@ h2 {
 .stack-section {
   display: grid;
   gap: 1rem;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-panel {
+  align-self: start;
+}
+
+.detail-block {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(110, 231, 183, 0.12);
+  border-radius: 1rem;
+  background: rgba(10, 84, 71, 0.45);
+}
+
+.action-row-start {
+  justify-content: flex-start;
 }
 
 .mini-block {
@@ -675,6 +703,7 @@ h2 {
   gap: 0.55rem;
 }
 
+/* Tablet and phone widths collapse multi-column sections into a single comfortable reading column. */
 @media (max-width: 900px) {
   .hero,
   .split-layout,
@@ -682,7 +711,8 @@ h2 {
   .dashboard-stats,
   .admin-links,
   .admin-grid,
-  .admin-stats {
+  .admin-stats,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -704,5 +734,262 @@ h2 {
 
   .coverage-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Compact mobile layout trims spacing, keeps actions reachable, and prevents nav overflow. */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    align-items: stretch;
+  }
+
+  .brand {
+    gap: 0.7rem;
+  }
+
+  .brand strong {
+    font-size: 0.95rem;
+  }
+
+  .brand-mark {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.7rem;
+  }
+
+  .nav {
+    order: 3;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    scrollbar-width: thin;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    padding: 0.58rem 0.8rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .auth-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.55rem;
+  }
+
+  .auth-actions .primary-button {
+    min-height: 2.55rem;
+    padding-inline: 0.85rem;
+  }
+
+  .user-chip {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .user-chip strong,
+  .user-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page {
+    width: min(100% - 0.9rem, 1180px);
+    padding: 1rem 0 1.8rem;
+  }
+
+  .page-stack {
+    gap: 1rem;
+  }
+
+  .hero > div:first-child,
+  .hero-panel,
+  .panel,
+  .profile-card,
+  .job-card,
+  .auth-card {
+    padding: 1rem;
+  }
+
+  .stats-grid,
+  .dashboard-stats,
+  .card-grid,
+  .admin-links,
+  .admin-grid,
+  .admin-stats,
+  .split-layout,
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-header,
+  .map-card-header,
+  .card-topline {
+    gap: 0.75rem;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    line-height: 1.1;
+  }
+
+  h2 {
+    font-size: 1.08rem;
+  }
+
+  .eyebrow {
+    margin-bottom: 0.55rem;
+    font-size: 0.72rem;
+  }
+
+  .muted,
+  .hero-copy,
+  .field-note,
+  .feature-list,
+  .meta-grid dt {
+    font-size: 0.92rem;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .ghost-button {
+    min-height: 2.6rem;
+    padding: 0.72rem 0.9rem;
+  }
+
+  .text-input {
+    min-height: 2.65rem;
+    padding: 0.72rem 0.82rem;
+    border-radius: 0.82rem;
+  }
+
+  .textarea-input {
+    min-height: 6rem;
+  }
+
+  .filter-row {
+    gap: 0.55rem;
+  }
+
+  .filter-row .text-input {
+    width: 100%;
+  }
+
+  .stat-card {
+    padding: 0.95rem 1rem;
+  }
+
+  .stat-card strong {
+    font-size: 1.55rem;
+  }
+
+  .pill,
+  .availability,
+  .rating,
+  .status {
+    font-size: 0.78rem;
+  }
+
+  .meta-grid {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+    margin: 0.9rem 0 1rem;
+  }
+
+  .list-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.85rem 0;
+  }
+
+  .list-item > span,
+  .action-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .auth-page {
+    min-height: auto;
+    padding-top: 1rem;
+  }
+
+  .auth-card {
+    width: 100%;
+  }
+
+  .auth-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .auth-form {
+    gap: 0.85rem;
+  }
+
+  .form-grid {
+    gap: 0.85rem;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-link-card {
+    padding: 0.9rem 1rem;
+  }
+
+  .map-card {
+    padding: 0.9rem;
+  }
+
+  .coverage-image-shell {
+    min-height: 250px;
+  }
+
+  .coverage-sidebar {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .coverage-marker {
+    min-width: 72px;
+    padding: 0.4rem 0.45rem;
+  }
+
+  .coverage-marker span,
+  .coverage-marker strong {
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar {
+    padding-inline: 0.75rem;
+  }
+
+  .page {
+    width: min(100% - 0.7rem, 1180px);
+  }
+
+  .brand p {
+    display: none;
+  }
+
+  .auth-switch {
+    grid-template-columns: 1fr;
+  }
+
+  .coverage-image-shell {
+    min-height: 220px;
   }
 }

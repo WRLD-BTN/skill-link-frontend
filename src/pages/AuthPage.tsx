@@ -1,9 +1,10 @@
+// Auth page handles client account creation, standard sign-in, and tradesperson request submission.
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { skills } from '../data/mockData'
-import { addJoinRequest } from '../lib/joinRequests'
+import { submitTradespersonRequest } from '../lib/api'
 import { normalizeZimbabwePhone } from '../lib/phone'
+import { skills } from '../data/mockData'
 import type { UserRole } from '../types'
 
 export function AuthPage() {
@@ -22,6 +23,7 @@ export function AuthPage() {
   const [yearsExperience, setYearsExperience] = useState('1')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -30,56 +32,76 @@ export function AuthPage() {
   }, [navigate, user])
 
   const from = (location.state as { from?: string } | null)?.from
-  const buttonLabel = authMode === 'create' ? 'Create account' : 'Sign in'
+  const buttonLabel =
+    authMode === 'create' && role === 'tradesperson'
+      ? 'Request admin approval'
+      : authMode === 'create'
+        ? 'Create account'
+        : 'Sign in'
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setSuccess('')
+    setSubmitting(true)
 
     const normalizedPhone = normalizeZimbabwePhone(phone)
 
-    if (!email.trim()) {
-      setError('Email is required.')
-      return
+    try {
+      if (authMode === 'create' && role === 'tradesperson') {
+        if (!name.trim() || !normalizedPhone || !suburb.trim() || !password.trim()) {
+          setError('Enter your name, phone, suburb, and password before sending a request.')
+          return
+        }
+
+        const result = await submitTradespersonRequest({
+          fullName: name.trim(),
+          email: email.trim(),
+          phone: normalizedPhone,
+          suburb: suburb.trim(),
+          city: city.trim() || 'Harare',
+          primarySkill,
+          yearsExperience: Number(yearsExperience) || 0,
+          password,
+        })
+
+        setSuccess(result.message)
+        navigate(
+          `/tradesperson-status?email=${encodeURIComponent(email.trim())}&phone=${encodeURIComponent(normalizedPhone)}`,
+          { replace: true },
+        )
+        return
+      }
+
+      const result = await login({
+        mode: authMode,
+        name,
+        email,
+        password,
+        phone,
+        role,
+        suburb,
+      })
+
+      if (!result.ok) {
+        if (role === 'tradesperson' && result.requiresApproval) {
+          navigate(
+            `/tradesperson-status?email=${encodeURIComponent(email.trim())}&phone=${encodeURIComponent(normalizedPhone ?? phone.trim())}`,
+            { replace: true },
+          )
+          return
+        }
+
+        setError(result.message ?? 'Unable to sign in.')
+        return
+      }
+
+      navigate(role === 'admin' ? '/admin' : from || '/dashboard', { replace: true })
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : 'Unable to complete this action.')
+    } finally {
+      setSubmitting(false)
     }
-
-    if (role !== 'admin' && !normalizedPhone) {
-      setError('Enter a valid Zimbabwean phone number.')
-      return
-    }
-
-    const result = login({ name, email, password, phone, role, suburb })
-
-    if (!result.ok) {
-      setError(result.message ?? 'Unable to sign in.')
-      return
-    }
-
-    navigate(role === 'admin' ? '/admin' : from || '/dashboard', { replace: true })
-  }
-
-  function handleJoinRequest() {
-    setError('')
-    setSuccess('')
-    const normalizedPhone = normalizeZimbabwePhone(phone)
-
-    if (!name.trim() || !normalizedPhone || !suburb.trim()) {
-      setError('Enter your name, phone, and suburb before sending a request.')
-      return
-    }
-
-    addJoinRequest({
-      fullName: name.trim(),
-      email: email.trim(),
-      phone: normalizedPhone,
-      suburb: suburb.trim(),
-      city: city.trim() || 'Harare',
-      primarySkill,
-      yearsExperience: Number(yearsExperience) || 0,
-    })
-
-    setSuccess('Join request sent to admin.')
   }
 
   return (
@@ -129,13 +151,19 @@ export function AuthPage() {
               value={email}
             />
           </label>
-          <p className="field-note">Email is used for sign in. Phone is captured for contact and admin records.</p>
+          <p className="field-note">Email is used for sign in. Phone is captured for contact and approval records.</p>
           <label>
             Password
             <input
               className="text-input"
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={role === 'admin' ? 'Enter admin password' : 'Enter your password'}
+              placeholder={
+                role === 'admin'
+                  ? 'Enter admin password'
+                  : authMode === 'create' && role === 'tradesperson'
+                    ? 'Choose a password for after approval'
+                    : 'Enter your password'
+              }
               type="password"
               value={password}
             />
@@ -173,11 +201,7 @@ export function AuthPage() {
           </label>
           <label>
             Role
-            <select
-              className="text-input"
-              value={role}
-              onChange={(event) => setRole(event.target.value as UserRole)}
-            >
+            <select className="text-input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
               <option value="client">Client</option>
               <option value="tradesperson">Tradesperson</option>
               <option value="admin">Admin</option>
@@ -188,11 +212,7 @@ export function AuthPage() {
             <div className="form-grid">
               <label>
                 Primary skill
-                <select
-                  className="text-input"
-                  onChange={(event) => setPrimarySkill(event.target.value)}
-                  value={primarySkill}
-                >
+                <select className="text-input" onChange={(event) => setPrimarySkill(event.target.value)} value={primarySkill}>
                   {skills.map((skill) => (
                     <option key={skill.id} value={skill.name}>
                       {skill.name}
@@ -213,24 +233,12 @@ export function AuthPage() {
             </div>
           )}
 
-          {role === 'admin' && (
-            <p className="auth-hint">
-              Admin password: <code>admin123</code>
-            </p>
-          )}
-
           {error && <p className="auth-error">{error}</p>}
           {success && <p className="auth-success">{success}</p>}
 
-          <button className="primary-button full-width" type="submit">
-            {buttonLabel}
+          <button className="primary-button full-width" disabled={submitting} type="submit">
+            {submitting ? 'Please wait...' : buttonLabel}
           </button>
-
-          {authMode === 'create' && role === 'tradesperson' && (
-            <button className="secondary-button full-width" onClick={handleJoinRequest} type="button">
-              Send join request to admin
-            </button>
-          )}
         </form>
       </div>
     </div>
