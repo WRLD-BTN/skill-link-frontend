@@ -38,6 +38,7 @@ export interface Job {
   city: string
   suburb: string
   clientEmail: string
+  clientPhone: string
   budgetMin: number
   budgetMax: number
   urgency: 'Flexible' | 'Urgent' | 'This Week'

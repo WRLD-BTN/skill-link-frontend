@@ -9,6 +9,7 @@ interface AuthUser {
   email: string
   role: UserRole
   suburb: string
+  city: string
 }
 
 interface AuthContextValue {
@@ -22,6 +23,7 @@ interface LoginPayload {
   phone: string
   email: string
   suburb: string
+  city: string
   role: UserRole
   password: string
 }
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      login: ({ email, name, password, phone, role, suburb }) => {
+      login: ({ email, name, password, phone, role, suburb, city }) => {
         const cleanedEmail = email.trim().toLowerCase()
         const normalizedPhone = normalizeZimbabwePhone(phone)
 
@@ -75,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: cleanedEmail,
           role,
           suburb: suburb.trim() || 'Harare',
+          city: city.trim() || (suburb.trim() || 'Harare'),
         }
 
         setUser(nextUser)

@@ -1,308 +1,410 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate } from 'react-router-dom'
-import { jobs, loginLogs, notifications, platformReviews, platformUsers, reports, skills } from '../data/mockData'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { readJoinRequests, writeJoinRequests } from '../lib/joinRequests'
-import { readRegisteredUsers, upsertRegisteredUser, writeRegisteredUsers } from '../lib/registeredUsers'
-import type { JoinRequest } from '../types'
+import { notifications, skills, tradespeople } from '../data/mockData'
+import { acceptApplication, addClientJob, readApplications, readJobs, rejectApplication, unacceptApplication } from '../lib/marketplaceStore'
+import type { Application, Job } from '../types'
 
 export function AdminDashboardPage() {
   const { user } = useAuth()
-  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
-  const [registeredUsers, setRegisteredUsers] = useState(platformUsers)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [applications, setApplications] = useState<Application[]>([])
+  const [title, setTitle] = useState('')
+  const [suburb, setSuburb] = useState(user?.suburb ?? '')
+  const [description, setDescription] = useState('')
+  const [skillName, setSkillName] = useState(skills[0]?.name ?? 'Plumber')
+  const [budgetMax, setBudgetMax] = useState('120')
+  const [message, setMessage] = useState('')
+  const role = user?.role ?? 'client'
 
   useEffect(() => {
-    setJoinRequests(readJoinRequests())
-    setRegisteredUsers(readRegisteredUsers())
+    setJobs(readJobs())
+    setApplications(readApplications())
   }, [])
 
-  if (user?.role !== 'admin') {
-    return <Navigate replace to="/dashboard" />
+  useEffect(() => {
+    setSuburb(user?.suburb ?? '')
+  }, [user?.suburb])
+
+  if (role === 'admin') {
+    return <Navigate replace to="/admin" />
   }
 
-  const allUsers = useMemo(() => registeredUsers, [registeredUsers])
-
-  const activeTradespeople = allUsers.filter(
-    (user) => user.role === 'tradesperson' && user.status === 'Active',
-  ).length
-  const flaggedReviews = platformReviews.filter((review) => review.status === 'Flagged').length
-  const openReports = reports.filter((report) => report.status !== 'Resolved').length
-  const adminAlerts = notifications.filter((item) => item.audience === 'admin' || item.audience === 'both')
-  const pendingJoinRequests = joinRequests.filter((request) => request.status === 'Pending').length
-
-  function updateJoinRequestStatus(id: string, status: JoinRequest['status']) {
-    const nextRequests = joinRequests.map((request) =>
-      request.id === id ? { ...request, status } : request,
-    )
-
-    setJoinRequests(nextRequests)
-    writeJoinRequests(nextRequests)
-
-    if (status === 'Approved') {
-      const approvedRequest = nextRequests.find((request) => request.id === id)
-
-      if (approvedRequest) {
-        upsertRegisteredUser({
-          fullName: approvedRequest.fullName,
-          phone: approvedRequest.phone,
-          email: approvedRequest.email,
-          suburb: approvedRequest.suburb,
-          role: 'tradesperson',
-        })
-        setRegisteredUsers(readRegisteredUsers())
-      }
+  const email = user?.email.trim().toLowerCase() ?? ''
+  const personalJobs = useMemo(
+    () => jobs.filter((job) => job.clientEmail.trim().toLowerCase() === email),
+    [email, jobs],
+  )
+  const personalApplications = useMemo(
+    () => applications.filter((application) => application.tradespersonEmail.trim().toLowerCase() === email),
+    [applications, email],
+  )
+  const applicantActivity = useMemo(
+    () => applications.filter((application) => application.clientEmail.trim().toLowerCase() === email),
+    [applications, email],
+  )
+  const nearbyOpenJobs = useMemo(
+    () =>
+      jobs
+        .filter(
+          (job) =>
+            job.status === 'Open' &&
+            job.clientEmail.trim().toLowerCase() !== email &&
+            (job.suburb.toLowerCase().includes(user?.suburb.toLowerCase() ?? '') ||
+              job.city.toLowerCase().includes(user?.suburb.toLowerCase() ?? '')),
+        )
+        .slice(0, 4),
+    [email, jobs, user?.suburb],
+  )
+  const baseAlerts = useMemo(
+    () => notifications.filter((item) => item.audience === role || item.audience === 'both'),
+    [role],
+  )
+  const alerts = useMemo(() => {
+    if (role === 'client') {
+      return [
+        {
+          id: 9101,
+          title: `${personalJobs.length} job requests posted`,
+          detail:
+            personalJobs.length > 0
+              ? `${applicantActivity.length} applications have reached your requests.`
+              : 'Post your first request and it will appear here right away.',
+          audience: 'client' as const,
+        },
+        {
+          id: 9102,
+          title: `${user?.suburb ?? 'Your area'} activity`,
+          detail:
+            applicantActivity.length > 0
+              ? `${applicantActivity[0].tradespersonName} recently responded to ${applicantActivity[0].jobTitle}.`
+              : 'New tradesperson interest will appear here.',
+          audience: 'client' as const,
+        },
+        ...baseAlerts,
+      ]
     }
-  }
 
-  function updateUserStatus(phone: string, status: 'Active' | 'Suspended') {
-    const nextUsers = registeredUsers.map((entry) =>
-      entry.phone.trim() === phone.trim() ? { ...entry, status } : entry,
+    return [
+      {
+        id: 9201,
+        title: `${personalApplications.length} applications from your account`,
+        detail:
+          personalApplications.length > 0
+            ? `Latest: ${personalApplications[0].jobTitle} in ${personalApplications[0].suburb}.`
+            : 'Apply to open work and track the response here.',
+        audience: 'tradesperson' as const,
+      },
+      {
+        id: 9202,
+        title: `${nearbyOpenJobs.length} nearby open jobs`,
+        detail:
+          nearbyOpenJobs.length > 0
+            ? `Closest match: ${nearbyOpenJobs[0].title}.`
+            : 'More jobs will appear here as clients post them.',
+        audience: 'tradesperson' as const,
+      },
+      ...baseAlerts,
+    ]
+  }, [applicantActivity, baseAlerts, nearbyOpenJobs, personalApplications, personalJobs.length, role, user?.suburb])
+
+  const totalApplicants = applicantActivity.length
+  const acceptedApplications = personalApplications.filter((item) => item.status === 'Accepted').length
+
+  function handleWhatsAppContact(application: Application) {
+    const tradesperson = tradespeople.find((tp) => tp.fullName === application.tradespersonName)
+    const waPhone = tradesperson?.whatsappNumber || ''
+
+    if (!waPhone) {
+      setMessage('WhatsApp number not available for this tradesperson.')
+      return
+    }
+
+    const cleanPhone = waPhone.replace(/\D/g, '')
+    const waMessage = encodeURIComponent(
+      `Hi ${application.tradespersonName}, I'm ${user?.name}. I accepted your application for "${application.jobTitle}" on SkillLink. Let's discuss the details!`
     )
-
-    setRegisteredUsers(nextUsers)
-    writeRegisteredUsers(nextUsers)
-  }
-
-  function removeUser(phone: string) {
-    const nextUsers = registeredUsers.filter((entry) => entry.phone.trim() !== phone.trim())
-    setRegisteredUsers(nextUsers)
-    writeRegisteredUsers(nextUsers)
+    window.open(`https://wa.me/${cleanPhone}?text=${waMessage}`, '_blank', 'noopener,noreferrer')
   }
 
   return (
     <div className="page-stack">
       <section className="section-header">
         <div>
-          <span className="eyebrow">Admin control</span>
-          <h1>Admin dashboard</h1>
+          <span className="eyebrow">Personal dashboard</span>
+          <h1>{role === 'client' ? `Welcome back, ${user?.name}` : `${user?.name}'s workboard`}</h1>
+          <p className="muted">
+            {role === 'client'
+              ? `You are posting and tracking requests around ${user?.suburb}.`
+              : `You are tracking applications and nearby opportunities around ${user?.suburb}.`}
+          </p>
         </div>
       </section>
 
-      <section className="stats-grid admin-stats">
+      <section className="stats-grid dashboard-stats">
         <article className="stat-card">
-          <strong>{allUsers.length}</strong>
-          <span>Total users</span>
+          <strong>{role === 'client' ? personalJobs.length : personalApplications.length}</strong>
+          <span>{role === 'client' ? 'Your requests' : 'Your applications'}</span>
         </article>
         <article className="stat-card">
-          <strong>{activeTradespeople}</strong>
-          <span>Active tradespeople</span>
+          <strong>{role === 'client' ? totalApplicants : acceptedApplications}</strong>
+          <span>{role === 'client' ? 'Responses received' : 'Accepted jobs'}</span>
         </article>
         <article className="stat-card">
-          <strong>{jobs.length}</strong>
-          <span>Jobs on platform</span>
+          <strong>{role === 'client' ? applicantActivity.length : nearbyOpenJobs.length}</strong>
+          <span>{role === 'client' ? 'Applicant activity' : 'Nearby open jobs'}</span>
         </article>
         <article className="stat-card">
-          <strong>{flaggedReviews}</strong>
-          <span>Flagged reviews</span>
-        </article>
-        <article className="stat-card">
-          <strong>{pendingJoinRequests}</strong>
-          <span>Pending join requests</span>
+          <strong>{alerts.length}</strong>
+          <span>Personal alerts</span>
         </article>
       </section>
 
-      <section className="admin-links">
-        <a className="admin-link-card" href="#requests">
-          <strong>Requests</strong>
-          <span>{pendingJoinRequests} pending</span>
-        </a>
-        <a className="admin-link-card" href="#users">
-          <strong>User management</strong>
-          <span>{allUsers.length} users</span>
-        </a>
-        <a className="admin-link-card" href="#jobs">
-          <strong>Jobs</strong>
-          <span>{jobs.length} listed</span>
-        </a>
-        <a className="admin-link-card" href="#reviews">
-          <strong>Reviews and reports</strong>
-          <span>{flaggedReviews + openReports} items</span>
-        </a>
-      </section>
-
-      <section className="admin-grid">
-        <div className="panel" id="requests">
-          <a className="section-link" href="#requests">
-            <h2>Tradesperson join requests</h2>
-          </a>
-          <div className="list-stack">
-            {joinRequests.map((request) => (
-              <article className="list-item" key={request.id}>
-                <div>
-                  <strong>{request.fullName}</strong>
-                  <p className="muted">
-                    {request.primarySkill} · {request.yearsExperience} yrs · {request.suburb},{' '}
-                    {request.city}
-                  </p>
-                  <p className="muted">
-                    {request.email} · {request.phone} · {request.submittedAt}
-                  </p>
-                </div>
-                <div className="action-row">
-                  <span className="status">{request.status}</span>
-                  <button
-                    className="ghost-button"
-                    onClick={() => updateJoinRequestStatus(request.id, 'Approved')}
-                    type="button"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="ghost-button"
-                    onClick={() => updateJoinRequestStatus(request.id, 'Rejected')}
-                    type="button"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel" id="users">
-          <a className="section-link" href="#users">
-            <h2>User management</h2>
-          </a>
-          <div className="list-stack">
-            {allUsers.map((user) => (
-              <article className="list-item" key={user.id}>
-                <div>
-                  <strong>{user.fullName}</strong>
-                  <p className="muted">
-                    {user.phone} · {user.suburb} · {user.role}
-                  </p>
-                  {user.email && <p className="muted">{user.email}</p>}
-                </div>
-                <div className="action-row">
-                  <span className="status">{user.status}</span>
-                  <button
-                    className="ghost-button"
-                    onClick={() => updateUserStatus(user.phone, 'Suspended')}
-                    type="button"
-                  >
-                    Suspend
-                  </button>
-                  <button
-                    className="ghost-button"
-                    onClick={() => updateUserStatus(user.phone, 'Active')}
-                    type="button"
-                  >
-                    Restore
-                  </button>
-                  <button className="ghost-button" onClick={() => removeUser(user.phone)} type="button">
-                    Remove
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel" id="jobs">
-          <a className="section-link" href="#jobs">
-            <h2>Jobs and disputes</h2>
-          </a>
-          <div className="list-stack">
-            {jobs.map((job) => (
-              <article className="list-item" key={job.id}>
-                <div>
-                  <strong>{job.title}</strong>
-                  <p className="muted">
-                    {job.suburb} · {job.clientName} · {job.status}
-                  </p>
-                </div>
-                <div className="action-row">
-                  <button className="ghost-button" type="button">
-                    Edit
-                  </button>
-                  <button className="ghost-button" type="button">
-                    Delete
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel" id="reviews">
-          <a className="section-link" href="#reviews">
-            <h2>Reviews and reports</h2>
-          </a>
-          <div className="list-stack">
-            {platformReviews.map((review) => (
-              <article className="list-item" key={review.id}>
-                <div>
-                  <strong>
-                    {review.target} · {review.rating}/5
-                  </strong>
-                  <p className="muted">{review.comment}</p>
-                </div>
-                <div className="action-row">
-                  <span className="status">{review.status}</span>
-                  <button className="ghost-button" type="button">
-                    Delete review
-                  </button>
-                </div>
-              </article>
-            ))}
-            {reports.map((report) => (
-              <article className="list-item" key={report.id}>
-                <div>
-                  <strong>
-                    {report.type}: {report.subject}
-                  </strong>
-                  <p className="muted">{report.reason}</p>
-                </div>
-                <div className="action-row">
-                  <span className="status">{report.status}</span>
-                  <button className="ghost-button" type="button">
-                    Investigate
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel" id="activity">
-          <a className="section-link" href="#activity">
-            <h2>Skills and security</h2>
-          </a>
-          <div className="stack-section">
-            <div className="mini-block">
-              <strong>Manage skill categories</strong>
-              <div className="pill-row">
-                {skills.map((skill) => (
-                  <span className="pill" key={skill.id}>
-                    {skill.name}
-                  </span>
-                ))}
-              </div>
+      {role === 'client' && (
+        <section className="panel">
+          <div className="section-header compact-header">
+            <div>
+              <Link className="section-link" to="/jobs">
+                <h2>Enter requests</h2>
+              </Link>
             </div>
-            <div className="mini-block">
-              <strong>Recent login logs</strong>
-              <div className="list-stack">
-                {loginLogs.map((log) => (
-                  <article className="list-item tight" key={log.id}>
+          </div>
+          <form
+            className="auth-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setMessage('')
+
+              const selectedSkill = skills.find((skill) => skill.name === skillName)
+              if (!user || !selectedSkill || !title.trim() || !suburb.trim()) {
+                setMessage('Add the job title, suburb, and skill before posting.')
+                return
+              }
+
+              const nextJob = addClientJob({
+                title: title.trim(),
+                description: description.trim() || 'Client posted a new request from the dashboard.',
+                skill: selectedSkill,
+                city: user.city || 'Harare',
+                suburb: suburb.trim(),
+                clientName: user.name,
+                clientEmail: user.email,
+                clientPhone: user.phone,
+                budgetMin: 0,
+                budgetMax: Number(budgetMax) || 0,
+                urgency: 'Flexible',
+              })
+
+              setJobs(readJobs())
+              setApplications(readApplications())
+              setTitle('')
+              setDescription('')
+              setSuburb('')
+              setBudgetMax('120')
+              setMessage(`Your request "${nextJob.title}" is now live.`)
+            }}
+          >
+            <div className="form-grid compact-grid">
+              <label>
+                Job title
+                <input
+                  className="text-input"
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Need an electrician for kitchen lights"
+                  type="text"
+                  value={title}
+                />
+              </label>
+              <label>
+                Skill needed
+                <select className="text-input" onChange={(event) => setSkillName(event.target.value)} value={skillName}>
+                  {skills.map((skill) => (
+                    <option key={skill.id} value={skill.name}>
+                      {skill.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Suburb
+                <input
+                  className="text-input"
+                  onChange={(event) => setSuburb(event.target.value)}
+                  placeholder="Borrowdale"
+                  type="text"
+                  value={suburb}
+                />
+              </label>
+              <label>
+                Budget ceiling
+                <input
+                  className="text-input"
+                  min="0"
+                  onChange={(event) => setBudgetMax(event.target.value)}
+                  type="number"
+                  value={budgetMax}
+                />
+              </label>
+            </div>
+            <label>
+              Notes
+              <textarea
+                className="text-input textarea-input"
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="A short note helps the right person respond faster."
+                value={description}
+              />
+            </label>
+            {message && <p className="auth-success">{message}</p>}
+            <button className="primary-button" type="submit">
+              Submit request
+            </button>
+          </form>
+        </section>
+      )}
+
+      <section className="split-layout dashboard-layout">
+        <div className="panel">
+          <Link className="section-link" to="/jobs">
+            <h2>{role === 'client' ? 'Your posted requests' : 'Your applications'}</h2>
+          </Link>
+          <div className="list-stack">
+            {role === 'client'
+              ? personalJobs.slice(0, 6).map((job) => (
+                  <article className="list-item" key={job.id}>
                     <div>
-                      <strong>{log.user}</strong>
+                      <strong>{job.title}</strong>
                       <p className="muted">
-                        {log.ipAddress} · {log.time}
+                        {job.suburb} · {job.skill.name} · {job.status}
                       </p>
                     </div>
+                    <span>{job.applicants} responses</span>
+                  </article>
+                ))
+              : personalApplications.slice(0, 6).map((application) => (
+                  <article className="list-item" key={application.id}>
+                    <div>
+                      <strong>{application.jobTitle}</strong>
+                      <p className="muted">
+                        {application.clientName} · {application.suburb}
+                      </p>
+                    </div>
+                    <span>{application.status}</span>
                   </article>
                 ))}
-              </div>
-            </div>
-            <div className="mini-block">
-              <strong>Pending actions</strong>
-              <p className="muted">
-                {openReports} open reports · {adminAlerts.length} admin alerts · {pendingJoinRequests}{' '}
-                join requests
-              </p>
-            </div>
+            {role === 'client' && personalJobs.length === 0 && (
+              <p className="muted">You have not posted any requests yet.</p>
+            )}
+            {role === 'tradesperson' && personalApplications.length === 0 && (
+              <p className="muted">You have not applied to any jobs yet.</p>
+            )}
           </div>
+        </div>
+
+        <div className="panel">
+          <Link className="section-link" to="/jobs">
+            <h2>{role === 'client' ? 'People responding to you' : 'Jobs near you'}</h2>
+          </Link>
+          <div className="list-stack">
+            {role === 'client'
+              ? applicantActivity.slice(0, 6).map((application) => (
+                  <article className="list-item" key={application.id}>
+                    <div>
+                      <strong>{application.tradespersonName}</strong>
+                      <p className="muted">
+                        Applied to {application.jobTitle} · ${application.proposedRate}
+                      </p>
+                      {application.status === 'Accepted' && (
+                        <button
+                          className="primary-button"
+                          onClick={() => handleWhatsAppContact(application)}
+                          type="button"
+                          style={{ marginTop: '0.5rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', minHeight: 'auto' }}
+                        >
+                          💬 Chat on WhatsApp
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span>{application.status}</span>
+                      {application.status === 'Pending' && (
+                        <button
+                          className="primary-button"
+                          onClick={() => {
+                            acceptApplication(application.id)
+                            setApplications(readApplications())
+                          }}
+                          type="button"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', minHeight: 'auto' }}
+                        >
+                          Accept
+                        </button>
+                      )}
+                      {application.status === 'Accepted' && (
+                        <button
+                          className="secondary-button"
+                          onClick={() => {
+                            unacceptApplication(application.id)
+                            setApplications(readApplications())
+                          }}
+                          type="button"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', minHeight: 'auto' }}
+                        >
+                          ↩ Unaccept
+                        </button>
+                      )}
+                      {(application.status === 'Pending' || application.status === 'Accepted') && (
+                        <button
+                          className="ghost-button"
+                          onClick={() => {
+                            rejectApplication(application.id)
+                            setApplications(readApplications())
+                          }}
+                          type="button"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', minHeight: 'auto' }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))
+              : nearbyOpenJobs.map((job) => (
+                  <article className="list-item" key={job.id}>
+                    <div>
+                      <strong>{job.title}</strong>
+                      <p className="muted">
+                        {job.suburb} · ${job.budgetMin} - ${job.budgetMax}
+                      </p>
+                    </div>
+                    <span>{job.skill.name}</span>
+                  </article>
+                ))}
+            {role === 'client' && applicantActivity.length === 0 && (
+              <p className="muted">Tradesperson responses will appear here as they come in.</p>
+            )}
+            {role === 'tradesperson' && nearbyOpenJobs.length === 0 && (
+              <p className="muted">No nearby jobs are open yet for your area.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <Link className="section-link" to="/jobs">
+          <h2>Your alerts</h2>
+        </Link>
+        <div className="list-stack">
+          {alerts.map((item) => (
+            <Link className="list-link" key={item.id} to="/jobs">
+              <article className="list-item">
+                <div>
+                  <strong>{item.title}</strong>
+                  <p className="muted">{item.detail}</p>
+                </div>
+              </article>
+            </Link>
+          ))}
         </div>
       </section>
     </div>

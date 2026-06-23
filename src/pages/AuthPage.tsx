@@ -49,7 +49,7 @@ export function AuthPage() {
       return
     }
 
-    const result = login({ name, email, password, phone, role, suburb })
+    const result = login({ name, email, password, phone, role, suburb, city })
 
     if (!result.ok) {
       setError(result.message ?? 'Unable to sign in.')
@@ -215,7 +215,7 @@ export function AuthPage() {
 
           {role === 'admin' && (
             <p className="auth-hint">
-              Admin password: <code>admin123</code>
+              Admin password: <code>skill-l!nk@2026</code>
             </p>
           )}
 
